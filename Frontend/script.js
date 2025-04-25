@@ -1,99 +1,127 @@
-let editingId = null; // Global flag for editing state
+let itemTypes = [];
+let editingItems = [];
 
-document.addEventListener("DOMContentLoaded", () => {
-  fetchTypes();
+document.addEventListener("DOMContentLoaded", async () => {
+  await fetchTypes();
+  addItemField();
+  document.getElementById("itemForm").addEventListener("submit", handleSubmit);
   loadItems();
-
-  document.getElementById("itemForm").addEventListener("submit", defaultSubmit);
 });
 
 async function fetchTypes() {
   const res = await fetch("http://localhost:3000/api/item-types");
-  const types = await res.json();
-  const select = document.querySelector("select[name='item_type']");
-  select.innerHTML = "";
-  types.forEach((type) => {
-    const opt = document.createElement("option");
-    opt.value = type.id;
-    opt.textContent = type.type_name;
-    select.appendChild(opt);
+  itemTypes = await res.json();
+}
+
+function addItemField(item = null) {
+  const container = document.getElementById("itemFieldsContainer");
+
+  const div = document.createElement("div");
+  div.classList.add("item-fields");
+  div.innerHTML = `
+    <input type="text" name="name" placeholder="Item Name" value="${
+      item ? item.name : ""
+    }" required />
+    <select name="item_type" required>
+      ${itemTypes
+        .map(
+          (type) =>
+            `<option value="${type.id}" ${
+              item && item.item_type_id === type.id ? "selected" : ""
+            }>${type.type_name}</option>`
+        )
+        .join("")}
+    </select>
+    <input type="date" name="purchase_date" value="${
+      item ? item.purchase_date : ""
+    }" required />
+    <label><input type="checkbox" name="stock_available" ${
+      item && item.stock_available ? "checked" : ""
+    } /> In Stock</label>
+    <button type="button" onclick="this.parentElement.remove()">Remove</button>
+    <br/><br/>
+  `;
+  container.appendChild(div);
+  if (item) editingItems.push(item);
+}
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  const fieldGroups = document.querySelectorAll(".item-fields");
+  console.log(fieldGroups);
+  const items = Array.from(fieldGroups).map((group) => {
+    return {
+      name: group.querySelector('input[name="name"]').value,
+      item_type_id: group.querySelector('select[name="item_type"]').value,
+      purchase_date: group.querySelector('input[name="purchase_date"]').value,
+      stock_available: group.querySelector('input[name="stock_available"]')
+        .checked,
+    };
   });
+
+  const res = await fetch("http://localhost:3000/api/items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(items),
+  });
+
+  if (res.ok) {
+    document.getElementById("itemForm").reset();
+    document.getElementById("itemFieldsContainer").innerHTML = "";
+    addItemField(); // Reset to one field
+    loadItems();
+  } else {
+    alert("Error submitting items");
+  }
 }
 
 async function loadItems() {
   const res = await fetch("http://localhost:3000/api/items");
   const items = await res.json();
-  console.log(items);
+
   const table = document.getElementById("itemTable");
   table.innerHTML = `<tr><th>Name</th><th>Type</th><th>Date</th><th>Stock</th><th>Actions</th></tr>`;
+
   items.forEach((item) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-        <td>${item.name}</td>
-        <td>${item.type_name}</td>
-        <td>${item.purchase_date.slice(0, 10)}</td>
-        <td>${item.stock_available ? "Yes" : "No"}</td>
-        <td>
-          <button onclick="editItem(${item.id}, '${item.name}', '${
-      item.purchase_date
-    }', ${item.stock_available}, ${item.type_id})">Edit</button>
-          <button onclick="deleteItem(${item.id})">Delete</button>
-        </td>
-      `;
+      <td>${item.name}</td>
+      <td>${item.type_name}</td>
+      <td>${item.purchase_date.slice(0, 10)}</td>
+      <td>${item.stock_available ? "Yes" : "No"}</td>
+      <td>
+        <button onclick="editItem(${item.id}, this)">Edit</button>
+        <button onclick="deleteItem(${item.id})">Delete</button>
+      </td>
+    `;
     table.appendChild(row);
   });
 }
 
-function editItem(id, name, date, stock, typeId) {
-  const form = document.getElementById("itemForm");
-  form.name.value = name;
-  form.purchase_date.value = date.slice(0, 10); // Only take the date part
-  form.stock_available.checked = stock;
-  form.item_type.value = typeId;
+function editItem(id, button) {
+  const row = button.closest("tr");
+  const name = row.querySelector("td:nth-child(1)").textContent;
+  const type = row.querySelector("td:nth-child(2)").textContent;
+  const purchaseDate = row.querySelector("td:nth-child(3)").textContent;
+  const stockAvailable =
+    row.querySelector("td:nth-child(4)").textContent === "Yes";
 
-  editingId = id; // Set the flag for editing mode
+  addItemField({
+    id,
+    name,
+    item_type_id: itemTypes.find((typeObj) => typeObj.type_name === type).id,
+    purchase_date: purchaseDate,
+    stock_available: stockAvailable,
+  });
+
+  // Remove edit button and make it behave like adding a new item
+  button.style.display = "none";
 }
 
 async function deleteItem(id) {
-  if (confirm("Are you sure you want to delete this item?")) {
-    const res = await fetch(`http://localhost:3000/api/items/${id}`, {
-      method: "DELETE",
-    });
-
-    if (res.ok) {
-      loadItems();
-    }
-  }
-}
-
-const defaultSubmit = async (e) => {
-  e.preventDefault(); // Prevent form from submitting traditionally
-  const form = e.target;
-
-  const data = {
-    name: form.name.value,
-    purchase_date: form.purchase_date.value,
-    stock_available: form.stock_available.checked,
-    item_type_id: form.item_type.value,
-  };
-
-  let url = "http://localhost:3000/api/items";
-  let method = "POST";
-
-  if (editingId !== null) {
-    url = `http://localhost:3000/api/items/${editingId}`; // Edit mode: Update an existing item
-    method = "PUT"; // Change method to PUT for update
-  }
-
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+  const res = await fetch(`http://localhost:3000/api/items/${id}`, {
+    method: "DELETE",
   });
 
-  if (res.ok) {
-    loadItems(); // Reload items after submission
-    form.reset(); // Reset form
-    editingId = null; // Reset editing mode
-  }
-};
+  if (res.ok) loadItems();
+}

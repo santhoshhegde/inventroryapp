@@ -10,18 +10,36 @@ router.get("/item-types", (req, res) => {
 });
 
 router.post("/items", (req, res) => {
-  const { name, purchase_date, stock_available, item_type_id } = req.body;
-  if (!name || !purchase_date || !item_type_id) {
-    return res.status(400).json({ error: "Required fields are missing" });
+  const items = req.body;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "Invalid input data" });
   }
-  db.query(
-    "INSERT INTO items (name, purchase_date, stock_available, item_type_id) VALUES (?, ?, ?, ?)",
-    [name, purchase_date, stock_available ? 1 : 0, item_type_id],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({ id: result.insertId });
+
+  const values = items.map(
+    ({ name, purchase_date, stock_available, item_type_id }) => {
+      if (!name || !purchase_date || !item_type_id) {
+        return null;
+      }
+      return [name, purchase_date, stock_available ? 1 : 0, item_type_id];
     }
   );
+
+  if (values.includes(null)) {
+    return res
+      .status(400)
+      .json({ error: "Required fields missing in some items" });
+  }
+
+  const sql =
+    "INSERT INTO items (name, purchase_date, stock_available, item_type_id) VALUES ?";
+  db.query(sql, [values], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({
+      message: "Items inserted successfully",
+      inserted: result.affectedRows,
+    });
+  });
 });
 
 router.get("/items", (req, res) => {
