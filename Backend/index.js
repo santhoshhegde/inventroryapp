@@ -11,7 +11,6 @@ app.use("/api", itemRoutes);
 app.listen(3000, () => console.log("Server running on port 3000"));
 
 /* ==== MYSQL SCHEMA ==== */
-// -- Run this in your MySQL client
 // CREATE DATABASE inventory_db;
 // USE inventory_db;
 

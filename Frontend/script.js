@@ -68,7 +68,7 @@ async function handleSubmit(e) {
   if (res.ok) {
     document.getElementById("itemForm").reset();
     document.getElementById("itemFieldsContainer").innerHTML = "";
-    addItemField(); // Reset to one field
+    addItemField();
     loadItems();
   } else {
     alert("Error submitting items");
@@ -113,9 +113,6 @@ function editItem(id, button) {
     purchase_date: purchaseDate,
     stock_available: stockAvailable,
   });
-
-  // Remove edit button and make it behave like adding a new item
-  button.style.display = "none";
 }
 
 async function deleteItem(id) {
